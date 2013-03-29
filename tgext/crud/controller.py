@@ -7,7 +7,7 @@ from tg.controllers import RestController
 
 from decorators import registered_validate, register_validators, catch_errors
 from tgext.crud.utils import get_table_headers, SmartPaginationCollection, RequestLocalTableFiller
-from utils import create_setter, set_table_filler_getter, SortableTableBase, optional_paginate
+from utils import create_setter, set_table_filler_getter, SortableTableBase
 from sprox.providerselector import ProviderTypeSelector
 from sprox.fillerbase import TableFiller
 from sprox.formbase import AddRecordForm, EditableForm
@@ -77,8 +77,6 @@ class CrudRestController(RestController):
     title = "Turbogears Admin System"
     keep_params = None
     remember_values = []
-    substring_filters = []
-    pagination = {'items_per_page': 7}
     style = Markup('''
 #menu_items {
   padding:0px 12px 0px 2px;
@@ -169,7 +167,7 @@ class CrudRestController(RestController):
         return pass_params
 
     def _adapt_menu_items(self, menu_items):
-        adapted_menu_items = type(menu_items)()
+        adapted_menu_items = {}
 
         for link, model in menu_items.iteritems():
             if inspect.isclass(model):
@@ -204,7 +202,7 @@ class CrudRestController(RestController):
     @expose('mako:tgext.crud.templates.get_all')
     @expose('jinja:tgext.crud.templates.get_all')
     @expose('json')
-    @optional_paginate('value_list')
+    @paginate('value_list', items_per_page=7)
     def get_all(self, *args, **kw):
         """Return all records.
            Pagination is done by offset/limit in the filler method.
@@ -213,34 +211,19 @@ class CrudRestController(RestController):
         if tg.request.response_type == 'application/json':
             return self.table_filler.get_value(**kw)
 
-        if self.pagination:
-            paginator = request.paginators['value_list']
-            paginator.paginate_items_per_page = self.pagination['items_per_page']
-        else:
-            paginator = request.paginators['value_list']
-            paginator.paginate_items_per_page = -1
-            paginator.paginate_page = 0
-
         if not getattr(self.table.__class__, '__retrieves_own_value__', False):
             kw.pop('limit', None)
             kw.pop('offset', None)
-            kw.pop('substring_filters', None)
 
-            if self.substring_filters is True:
-                substring_filters = kw.keys()
-            else:
-                substring_filters = self.substring_filters
-
-            if self.pagination and isinstance(self.table_filler, RequestLocalTableFiller):
+            if isinstance(self.table_filler, RequestLocalTableFiller):
                 paginator = request.paginators['value_list']
                 page = paginator.paginate_page - 1
                 values = self.table_filler.get_value(offset=page*paginator.paginate_items_per_page,
                                                      limit=paginator.paginate_items_per_page,
-                                                     substring_filters=substring_filters,
                                                      **kw)
                 values = SmartPaginationCollection(values, self.table_filler.__count__)
             else:
-                values = self.table_filler.get_value(substring_filters=substring_filters, **kw)
+                values = self.table_filler.get_value(**kw)
         else:
             values = []
 
